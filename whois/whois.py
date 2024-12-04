@@ -72,7 +72,6 @@ class NICClient(object):
     KZ_HOST = "whois.nic.kz"
     LAT_HOST = "whois.nic.lat"
     LI_HOST = "whois.nic.li"
-    LIVE_HOST = "whois.nic.live"
     LNICHOST = "whois.lacnic.net"
     LT_HOST = "whois.domreg.lt"
     MARKET_HOST = "whois.nic.market"
@@ -94,13 +93,12 @@ class NICClient(object):
     SNICHOST = "whois.6bone.net"
     WEBSITE_HOST = "whois.nic.website"
     ZA_HOST = "whois.registry.net.za"
-    RU_HOST = "whois.tcinet.ru"
+    RU_HOST = "whois.nic.ru"
     IDS_HOST = "whois.identitydigital.services"
     GDD_HOST = "whois.dnrs.godaddy"
     SHOP_HOST = "whois.nic.shop"
     SG_HOST = "whois.sgnic.sg"
     STORE_HOST = "whois.centralnic.com"
-    STUDIO_HOST = "whois.nic.studio"
     DETI_HOST = "whois.nic.xn--d1acj3b"
     MOSKVA_HOST = "whois.registry.nic.xn--80adxhks"
     RF_HOST = "whois.registry.tcinet.ru"
@@ -110,6 +108,7 @@ class NICClient(object):
     UKR_HOST = "whois.dotukr.com"
     TN_HOST = "whois.ati.tn"
     SBS_HOST = "whois.nic.sbs"
+    EU_HOST = "whois.eu"
 
     SITE_HOST = "whois.nic.site"
     DESIGN_HOST = "whois.nic.design"
@@ -146,7 +145,29 @@ class NICClient(object):
         return nhost
 
     @staticmethod
-    def get_socket():
+    def findwhois_iana(tld):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(10)
+        s.connect(("whois.iana.org", 43))
+        s.send(bytes(tld, "utf-8") + b"\r\n")
+        response = b""
+        while True:
+            d = s.recv(4096)
+            response += d
+            if not d:
+                break
+        s.close()
+        return re.search(r"whois:\s+(.*?)\n", response.decode("utf-8")).group(1)
+
+    def whois(self, query, hostname, flags, many_results=False, quiet=False):
+        """Perform initial lookup with TLD whois server
+        then, if the quick flag is false, search that result
+        for the region-specific whois server and do a lookup
+        there for contact details.  If `quiet` is `True`, will
+        not send a message to logger when a socket error
+        is encountered.
+        """
+        response = b""
         if "SOCKS" in os.environ:
             try:
                 import socks
@@ -174,35 +195,7 @@ class NICClient(object):
             )
         else:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        return s
-
-
-    def findwhois_iana(self, tld):
-        s = self.get_socket()
         s.settimeout(10)
-        s.connect(("whois.iana.org", 43))
-        s.send(bytes(tld, "utf-8") + b"\r\n")
-        response = b""
-        while True:
-            d = s.recv(4096)
-            response += d
-            if not d:
-                break
-        s.close()
-        return re.search(r"whois:\s+(.*?)\n", response.decode("utf-8")).group(1)
-
-    def whois(self, query, hostname, flags, many_results=False, quiet=False, timeout=10):
-        """Perform initial lookup with TLD whois server
-        then, if the quick flag is false, search that result
-        for the region-specific whois server and do a lookup
-        there for contact details.  If `quiet` is `True`, will
-        not send a message to logger when a socket error
-        is encountered. Uses `timeout` as a number of seconds
-        to set as a timeout on the socket
-        """
-        response = b""
-        s = self.get_socket()
-        s.settimeout(timeout)
         try:  # socket.connect in a try, in order to allow things like looping whois on different domains without
             # stopping on timeouts: https://stackoverflow.com/questions/25447803/python-socket-connection-exception
             s.connect((hostname, 43))
@@ -217,8 +210,6 @@ class NICClient(object):
                 query_bytes = "-T dn,ace -C UTF-8 " + query
             elif hostname == NICClient.DK_HOST:
                 query_bytes = " --show-handles " + query
-            elif hostname.endswith(".jp"):
-                query_bytes = query + '/e'
             elif hostname.endswith(NICClient.QNICHOST_TAIL) and many_results:
                 query_bytes = "=" + query
             else:
@@ -241,7 +232,7 @@ class NICClient(object):
             if nhost is not None and nhost != "":
                 response += self.whois(query, nhost, 0, quiet=True)
         except (
-            socket.error
+                socket.error
         ) as exc:  # 'response' is assigned a value (also a str) even on socket timeout
             if not quiet:
                 logger.error(
@@ -267,6 +258,10 @@ class NICClient(object):
             return NICClient.HR_HOST
         if domain.endswith(".pp.ua"):
             return NICClient.PPUA_HOST
+        if domain.endswith(".com.br"):
+            return NICClient.BNICHOST
+        elif domain.endswith(".eu"):
+            return NICClient.EU_HOST
 
         domain = domain.split(".")
         if len(domain) < 2:
@@ -322,8 +317,6 @@ class NICClient(object):
             return NICClient.LAT_HOST
         elif tld == "li":
             return NICClient.LI_HOST
-        elif tld == "live":
-            return NICClient.LIVE_HOST
         elif tld == "lt":
             return NICClient.LT_HOST
         elif tld == "market":
@@ -355,7 +348,7 @@ class NICClient(object):
         elif tld == "design":
             return NICClient.DESIGN_HOST
         elif tld == "studio":
-            return NICClient.STUDIO_HOST
+            return NICClient.RU_HOST
         elif tld == "style":
             return NICClient.RU_HOST
         elif tld == "su":
@@ -419,7 +412,7 @@ class NICClient(object):
             options = {}
 
         if ("whoishost" not in options or options["whoishost"] is None) and (
-            "country" not in options or options["country"] is None
+                "country" not in options or options["country"] is None
         ):
             self.use_qnichost = True
             options["whoishost"] = NICClient.NICHOST
