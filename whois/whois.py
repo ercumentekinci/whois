@@ -109,7 +109,8 @@ class NICClient(object):
     TN_HOST = "whois.ati.tn"
     SBS_HOST = "whois.nic.sbs"
     EU_HOST = "whois.eu"
-
+    BIZ_HOST = "whois.biz"
+    VET_HOST = "whois.nic.vet"
     SITE_HOST = "whois.nic.site"
     DESIGN_HOST = "whois.nic.design"
 
@@ -260,8 +261,10 @@ class NICClient(object):
             return NICClient.PPUA_HOST
         if domain.endswith(".com.br"):
             return NICClient.BNICHOST
-        elif domain.endswith(".eu"):
+        if domain.endswith(".eu"):
             return NICClient.EU_HOST
+        if domain.endswith("biz"):
+            return NICClient.BIZ_HOST
 
         domain = domain.split(".")
         if len(domain) < 2:
@@ -335,6 +338,8 @@ class NICClient(object):
             return NICClient.PAGE_HOST
         elif tld == "pe":
             return NICClient.PE_HOST
+        elif tld == "vet":
+            return NICClient.VET_HOST
         elif tld == "website":
             return NICClient.WEBSITE_HOST
         elif tld == "za":
